@@ -34,10 +34,13 @@ from utils.clip_utils import CLIPEditor
 import yaml
 from models.networks import CNN_decoder, MLP_encoder
 
+from utils.loss_utils import l1_loss
+
 
 def feature_visualize_saving(feature):
     fmap = feature[None, :, :, :] # torch.Size([1, 512, h, w])
     fmap = nn.functional.normalize(fmap, dim=1)
+    print("fmap have nan value ", np.isnan(fmap.cpu()).any())
     pca = sklearn.decomposition.PCA(3, random_state=42)
     f_samples = fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])[::3].cpu().numpy()
     transformed = pca.fit_transform(f_samples)
@@ -137,8 +140,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) ###
             if speedup:
                 feature_map = cnn_decoder(feature_map)
-
             feature_map_vis = feature_visualize_saving(feature_map)
+       
             Image.fromarray((feature_map_vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(edit_feature_map_path, '{0:05d}'.format(idx) + "_feature_vis.png"))
             gt_feature_map_vis = feature_visualize_saving(gt_feature_map)
             Image.fromarray((gt_feature_map_vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(edit_gt_feature_map_path, '{0:05d}'.format(idx) + "_feature_vis.png"))
@@ -169,11 +172,17 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) ###
             if speedup:
                 feature_map = cnn_decoder(feature_map)
-
+            #np.savetxt(f"./output/{idx}.txt", feature_map.cpu().reshape(feature_map.shape[0], -1))
             feature_map_vis = feature_visualize_saving(feature_map)
             Image.fromarray((feature_map_vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(feature_map_path, '{0:05d}'.format(idx) + "_feature_vis.png"))
             gt_feature_map_vis = feature_visualize_saving(gt_feature_map)
             Image.fromarray((gt_feature_map_vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(gt_feature_map_path, '{0:05d}'.format(idx) + "_feature_vis.png"))
+
+
+            #calculate the l1 loss of rendering
+            loss = l1_loss(gt_feature_map, feature_map)
+            print("loss for idx = ", idx , " is  ", loss)
+
 
             # save feature map
             feature_map = feature_map.cpu().numpy().astype(np.float16)
@@ -255,6 +264,8 @@ def render_novel_views(model_path, name, iteration, views, gaussians, pipeline, 
         #encoder_ckpt_path = os.path.join(model_path, "encoder_chkpnt{}.pth".format(iteration))
         decoder_ckpt_path = os.path.join(model_path, "decoder_chkpnt{}.pth".format(iteration))
 
+        ## add
+        speedup = False
         if speedup:
             gt_feature_map = views[0].semantic_feature.cuda()
             feature_out_dim = gt_feature_map.shape[0]

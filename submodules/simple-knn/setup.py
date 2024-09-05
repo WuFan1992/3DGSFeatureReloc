@@ -22,7 +22,7 @@ setup(
     name="simple_knn",
     ext_modules=[
         CUDAExtension(
-            name="simple_knn._C",
+            name="simple_knn",
             sources=[
             "spatial.cu", 
             "simple_knn.cu",

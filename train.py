@@ -71,7 +71,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
 
     for iteration in range(first_iter, opt.iterations + 1):
-
+        
         iter_start.record()
 
         gaussians.update_learning_rate(iteration)
@@ -88,23 +88,28 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
+
+        print("iteration = ", iteration)
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
-        
+        print("finish render ", iteration)
 
         feature_map, image, viewspace_point_tensor, visibility_filter, radii = render_pkg["feature_map"], render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         gt_feature_map = viewpoint_cam.semantic_feature.cuda()
         feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) 
+        print("feature map size = ", feature_map.shape)
+        print("gt feaature map size = ", gt_feature_map.shape)
         if dataset.speedup:
             feature_map = cnn_decoder(feature_map)
+         
         Ll1_feature = l1_loss(feature_map, gt_feature_map) 
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + 1.0 * Ll1_feature 
-
+        print("loss = ", loss)
         loss.backward()
+        print("before record ")
         iter_end.record()
 
         with torch.no_grad():
@@ -264,6 +269,7 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
+    print ("source path = ", lp._source_path )
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
     # All done

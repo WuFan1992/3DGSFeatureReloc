@@ -4,7 +4,77 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import pickle
 
+
+import numpy as np
+import cv2
+
 from utils.visual_common import MultiFigure
+from torch_dimcheck import dimchecked
+
+class Image:
+    def __init__(self, bitmap: ['C', 'H', 'W'], fname: str, orig_shape=None):
+        self.bitmap     = bitmap
+        self.fname      = fname
+        if orig_shape is None:
+            self.orig_shape = self.bitmap.shape[1:]
+        else:
+            self.orig_shape = orig_shape
+
+    def resize_to(self, shape):
+        return Image(
+            self._pad(self._interpolate(self.bitmap, shape), shape),
+            self.fname,
+            orig_shape=self.bitmap.shape[1:],
+        )
+
+    @dimchecked
+    def to_image_coord(self, xys: [2, 'N']) -> ([2, 'N'], ['N']):
+        f, _size = self._compute_interpolation_size(self.bitmap.shape[1:])
+        scaled = xys / f
+
+        h, w = self.orig_shape
+        x, y = scaled
+
+        mask = (0 <= x) & (x < w) & (0 <= y) & (y < h)
+        
+        return scaled, mask
+
+    def _compute_interpolation_size(self, shape):
+        x_factor = self.orig_shape[0] / shape[0]
+        y_factor = self.orig_shape[1] / shape[1]
+
+        f = 1 / max(x_factor, y_factor)
+
+        if x_factor > y_factor:
+            new_size = (shape[0], int(f * self.orig_shape[1]))
+        else:
+            new_size = (int(f * self.orig_shape[0]), shape[1])
+
+        return f, new_size
+
+    @dimchecked
+    def _interpolate(self, image: ['C', 'H', 'W'], shape) -> ['C', 'h', 'w']:
+        _f, size = self._compute_interpolation_size(shape)
+        return F.interpolate(
+            image.unsqueeze(0),
+            size=size,
+            mode='bilinear',
+            align_corners=False,
+        ).squeeze(0)
+    
+    @dimchecked
+    def _pad(self, image: ['C', 'H', 'W'], shape) -> ['C', 'h', 'w']:
+        x_pad = shape[0] - image.shape[1]
+        y_pad = shape[1] - image.shape[2]
+
+        if x_pad < 0 or y_pad < 0:
+            raise ValueError("Attempting to pad by negative value")
+
+        return F.pad(image, (0, y_pad, 0, x_pad))
+
+
+
+
 
 parser = argparse.ArgumentParser(
     description='Script for viewing the keypoints.h5 and matches.h5 contents',
@@ -72,9 +142,64 @@ def view_matches(pkl_path, img_query_path, img_ref_path):
     with open(pkl_path, 'rb') as f:
         match_p = pickle.load(f)
 
+    img_1 = imageio.imread(img_query_path)
+    img_2 = imageio.imread(img_ref_path)
 
-    bm_1 = torch.from_numpy(imageio.imread(img_query_path))
-    bm_2 = torch.from_numpy(imageio.imread(img_ref_path))
+    img_1 = cv2.resize(img_1, (64, 32))
+    img_2 = cv2.resize(img_2, (64, 32))
+
+    bm_1 = torch.from_numpy(img_1)
+    bm_2 = torch.from_numpy(img_2)
+
+
+    """
+    
+    tensor_1 = bm_1.to(torch.float32)
+    tensor_2 = bm_2.to(torch.float32)
+
+
+    bitmap_1              = tensor_1.permute(2, 0, 1) / 255.
+    name_query = os.path.basename(img_query_path)
+    extensionless_fname_query = os.path.splitext(name_query)[0]
+
+    bitmap_2              = tensor_2.permute(2, 0, 1) / 255.
+    name_ref = os.path.basename(img_ref_path)
+    extensionless_fname_ref = os.path.splitext(name_ref)[0]
+
+    image_query = Image(bitmap_1, extensionless_fname_query)
+    image_ref = Image(bitmap_2, extensionless_fname_ref)
+
+    print("image ref shape = ", bitmap_1.shape)
+
+    image_query = image_query.resize_to((64, 32))
+    image_ref = image_ref.resize_to((64, 32))
+
+
+    bm_1 = image_query.bitmap.permute(1,2,0)
+    bm_2 = image_ref.bitmap.permute(1,2,0)
+
+    print("bm_1 shape = ", bm_1.shape)
+
+
+    bigger_x = max(bm_1.shape[0], bm_2.shape[0])
+    bigger_y = max(bm_1.shape[1], bm_2.shape[1])
+
+    padded_1 = F.pad(bm_1, (
+                0, 0,
+                0, bigger_y - bm_1.shape[1],
+                0, bigger_x - bm_1.shape[0]
+            ))
+    padded_2 = F.pad(bm_2, (
+                0, 0,
+                0, bigger_y - bm_2.shape[1],
+                0, bigger_x - bm_2.shape[0]
+            ))
+
+    
+    ##########
+
+    """
+    
 
     bigger_x = max(bm_1.shape[0], bm_2.shape[0])
     bigger_y = max(bm_1.shape[1], bm_2.shape[1])
@@ -98,6 +223,27 @@ def view_matches(pkl_path, img_query_path, img_ref_path):
     fig.mark_xy(ref_p, query_p)
 
     show_or_save()
+
+    ##########
+
+
+"""
+    bigger_x = max(bm_1.shape[0], bm_2.shape[0])
+    bigger_y = max(bm_1.shape[1], bm_2.shape[1])
+
+    padded_1 = F.pad(bm_1, (
+                0, 0,
+                0, bigger_y - bm_1.shape[1],
+                0, bigger_x - bm_1.shape[0]
+            ))
+    padded_2 = F.pad(bm_2, (
+                0, 0,
+                0, bigger_y - bm_2.shape[1],
+                0, bigger_x - bm_2.shape[0]
+            ))
+
+"""  
+    
 
 #if args.mode == 'keypoints':
 #    pass

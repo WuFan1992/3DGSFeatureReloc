@@ -1,10 +1,11 @@
 import torch
 import torch.nn.functional as F
+import time 
 
 threshold = 0.9
 
 
-class DenseMatcher(torch.nn.Module):
+class DenseMatcher():
     def __init__(self, feature_query, feature_projection):
         super().__init__()
         self.feature_query = feature_query
@@ -38,16 +39,26 @@ class DenseMatcher(torch.nn.Module):
 
     def computeSimilarity(self, feature_query, feature_projection):
         #cosine similarity
-        res = torch.randn(feature_query.size(1), feature_query.size(1))
+        res = torch.randn(feature_query.size(1), feature_projection.size(1))
+        ct = 1
+        start_time = time.time()
+
+        
         for i in range(feature_query.size(1)):
             for j in range(feature_projection.size(1)):
-                res[i][j] = F.cosine_similarity(feature_query[:,i], feature_projection[:,j], dim=0)
+                ct= ct+1
+                res[i][j] = F.cosine_similarity(feature_query[:,i], feature_projection[:,j], dim=0).item()
+                print("i = ", i, "j = ", j, "res = ", res[i][j] , " ct = ", ct)
+        print("--- %s seconds ---" % (time.time() - start_time))
+              
         
         #get the max indice
         col_max_indices = torch.argmax(res, dim=0).tolist()
         row_max_indices = torch.argmax(res, dim=1).tolist()
 
         return res, col_max_indices, row_max_indices
+
+
     
     def getMatchingPoints(self, res, col_max_indices, row_max_indices):
         query_matching_points = []
@@ -63,7 +74,7 @@ class DenseMatcher(torch.nn.Module):
         
         return query_matching_points, projection_matching_points
 
-    def forward(self):
+    def matching(self):
         # Get the preprocessing features
         feature_query, feature_projection = self.preprocess()
 
@@ -74,3 +85,6 @@ class DenseMatcher(torch.nn.Module):
         query_matching_points, projection_matching_points = self.getMatchingPoints(res, col_max_indices, row_max_indices)
 
         return query_matching_points, projection_matching_points 
+    
+ 
+        
