@@ -39,8 +39,21 @@ from utils.loss_utils import l1_loss
 
 def feature_visualize_saving(feature):
     fmap = feature[None, :, :, :] # torch.Size([1, 512, h, w])
-    fmap = nn.functional.normalize(fmap, dim=1)
-    print("fmap have nan value ", np.isnan(fmap.cpu()).any())
+    tmp = (np.isnan(fmap.cpu()))
+    #print(tmp.nonzero(as_tuple=False))
+    #np.savetxt("./data/hello.txt", tmp.int().cpu().reshape(tmp.shape[1], -1))
+    #np.savetxt("./data/hello.txt", tmp.nonzero(as_tuple=False))
+    #print("is nan = ", np.isnan(fmap.cpu()).any())
+
+
+    #fmap = nn.functional.normalize(fmap, dim=1)
+
+    ####
+    #print("fmap have nan value ", np.isnan(fmap.cpu()).)
+    #indices = fmap == float('nan') 
+    #ok = indices.nonzero()
+    #print("ok = ", ok.cpu())
+    #
     pca = sklearn.decomposition.PCA(3, random_state=42)
     f_samples = fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])[::3].cpu().numpy()
     transformed = pca.fit_transform(f_samples)
@@ -148,7 +161,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
         else:
             render_pkg = render(view, gaussians, pipeline, background) 
-
             gt = view.original_image[0:3, :, :]
             gt_feature_map = view.semantic_feature.cuda() 
             torchvision.utils.save_image(render_pkg["render"], os.path.join(render_path, '{0:05d}'.format(idx) + ".png")) 
@@ -172,7 +184,6 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) ###
             if speedup:
                 feature_map = cnn_decoder(feature_map)
-            #np.savetxt(f"./output/{idx}.txt", feature_map.cpu().reshape(feature_map.shape[0], -1))
             feature_map_vis = feature_visualize_saving(feature_map)
             Image.fromarray((feature_map_vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(feature_map_path, '{0:05d}'.format(idx) + "_feature_vis.png"))
             gt_feature_map_vis = feature_visualize_saving(gt_feature_map)
@@ -372,8 +383,13 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
 
-        bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+        #bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+        dim = scene.getTrainCameras()[0].semantic_feature.shape[0]
+        print("dim = ", dim)
+        bg_color = [1]*128 if dataset.white_background else [0]*128
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+
+        print("background = ", background.cpu())
 
         if not skip_train:
              render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, edit_config, dataset.speedup)

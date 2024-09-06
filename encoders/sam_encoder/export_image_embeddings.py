@@ -79,8 +79,13 @@ def main(args: argparse.Namespace) -> None:
         _, fea_h, fea_w = image_embedding_tensor.shape
         cropped_h = int(fea_w / img_w * img_h + 0.5)
         image_embedding_tensor_cropped = image_embedding_tensor[:, :cropped_h, :]
+        ###
+        image_embedding_tensor_cropped = image_embedding_tensor_cropped[:128, :, :]
+        image_embedding_tensor_cropped = image_embedding_tensor_cropped.repeat(1,10,10)
         print("embedding shape: ", image_embedding_tensor.shape)
         print("image_embedding_tensor_cropped: ", image_embedding_tensor_cropped.shape)
+        ####
+
         torch.save(image_embedding_tensor_cropped, os.path.join(args.output, f"{img_name}_fmap_CxHxW.pt"))
         
 
