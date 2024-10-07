@@ -17,7 +17,11 @@ from utils.graphics_utils import fov2focal
 WARNED = False
 
 def loadCam(args, id, cam_info, resolution_scale):
+    #///////////////
     orig_w, orig_h = cam_info.image.size
+    #orig_w = cam_info.image.shape[1]
+    #orig_h = cam_info.image.shape[2]
+    #//////////////////
     
     gt_semantic_feature = cam_info.semantic_feature
     if args.resolution in [1, 2, 4, 8]:
@@ -47,8 +51,11 @@ def loadCam(args, id, cam_info, resolution_scale):
         scale = float(global_down) * float(resolution_scale)
         resolution = (int(orig_w / scale), int(orig_h / scale))
 
+    #////////////////////
     resized_image_rgb = PILtoTorch(cam_info.image, resolution)
-
+    #resized_image_rgb = cam_info.image
+    #///////////////
+    
     gt_image = resized_image_rgb[:3, ...]
     loaded_mask = None
 

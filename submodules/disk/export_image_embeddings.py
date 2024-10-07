@@ -143,7 +143,6 @@ def extract(dataset, save_path):
 
     pbar = tqdm(dataloader)
     for bitmaps, images in pbar:
-        print("bit map size = ", bitmaps.shape)
         bitmaps = bitmaps.to(DEV, non_blocking=True)
         with torch.no_grad():
             try:
@@ -151,7 +150,19 @@ def extract(dataset, save_path):
                 dense_feature = fdense_extract(bitmaps).squeeze(dim=0)
                 img_name = images[0].fname.split(".")[0]
                 dense_feature = torch.nn.functional.normalize(dense_feature, dim=1).to("cpu")
-                torch.save(dense_feature, os.path.join(args.output, f"{img_name}_fmap_CxHxW.pt"))
+
+                #//////////////// take channel 1 50 and 100 to form a image RGB //////
+                artifical_img = torch.rand(3, dense_feature.shape[1], dense_feature.shape[2])
+                artifical_img[0,:,:] = dense_feature[1,:,:]
+                artifical_img[1,:,:] = dense_feature[50,:,:]
+                artifical_img[2,:,:] = dense_feature[100,:,:]
+                delta = torch.max(artifical_img) - torch.min(artifical_img)
+                artifical_img = artifical_img / delta
+                torch.save(artifical_img, os.path.join(args.output, f"{img_name}.color.pt"))
+
+                #///////////////////////////////////////////////////////////
+
+                #torch.save(dense_feature, os.path.join(args.output, f"{img_name}_fmap_CxHxW.pt"))
 
             except RuntimeError as e:
                 if 'U-Net failed' in str(e):
@@ -167,7 +178,7 @@ def extract(dataset, save_path):
 
         for features, image in zip(batched_features.flat, images):
             features = features.to(CPU)
-
+            print("feature size = ", type(features))
             kps_crop_space = features.kp.T
             kps_img_space, mask = image.to_image_coord(kps_crop_space)
 

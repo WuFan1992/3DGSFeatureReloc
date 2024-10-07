@@ -36,27 +36,15 @@ from models.networks import CNN_decoder, MLP_encoder
 
 from utils.loss_utils import l1_loss
 
+import matplotlib.pyplot as plt
+
 
 def feature_visualize_saving(feature):
-    fmap = feature[None, :, :, :] # torch.Size([1, 512, h, w])
-    tmp = (np.isnan(fmap.cpu()))
-    #print(tmp.nonzero(as_tuple=False))
-    #np.savetxt("./data/hello.txt", tmp.int().cpu().reshape(tmp.shape[1], -1))
-    #np.savetxt("./data/hello.txt", tmp.nonzero(as_tuple=False))
-    #print("is nan = ", np.isnan(fmap.cpu()).any())
-
-
-    #fmap = nn.functional.normalize(fmap, dim=1)
-
-    ####
-    #print("fmap have nan value ", np.isnan(fmap.cpu()).)
-    #indices = fmap == float('nan') 
-    #ok = indices.nonzero()
-    #print("ok = ", ok.cpu())
-    #
+    fmap = feature[None, :, :, :] # torch.Size([1, 128, h, w])
+    fmap = nn.functional.normalize(fmap, dim=1)
     pca = sklearn.decomposition.PCA(3, random_state=42)
-    f_samples = fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])[::3].cpu().numpy()
-    transformed = pca.fit_transform(f_samples)
+    f_samples = fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])[::3].cpu().numpy() # for 480x640 image its size is [102400,128]
+    transformed = pca.fit_transform(f_samples) # [102400,3]
     feature_pca_mean = torch.tensor(f_samples.mean(0)).float().cuda()
     feature_pca_components = torch.tensor(pca.components_).float().cuda()
     q1, q99 = np.percentile(transformed, [1, 99])
@@ -141,6 +129,8 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         makedirs(saved_feature_path, exist_ok=True)
         makedirs(depth_path, exist_ok=True) ###
 
+    mean_loss = 0
+
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         if edit_config != "no editing":
             render_pkg = render_edit(view, gaussians, pipeline, background, text_feature, edit_dict) 
@@ -193,11 +183,29 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             #calculate the l1 loss of rendering
             loss = l1_loss(gt_feature_map, feature_map)
             print("loss for idx = ", idx , " is  ", loss)
+            mean_loss = mean_loss + loss
 
+            #//////////////////////////////////////
+            all_loss = 0
+            if idx == 0:
+                for i in range(128):
+                    layer_feature_map = feature_map[i,:,:].to("cpu")
+                    gt_layer_feature_map = gt_feature_map[i,:,:].to("cpu")
+                    layer_loss = l1_loss(gt_feature_map[i,:,:], feature_map[i,:,:]) 
+                    plt.imsave(f"./output/each_channel_feature_map/feature/{i}_{layer_loss}.png", layer_feature_map, cmap='gray')
+                    plt.imsave(f"./output/each_channel_feature_map/gt/{i}.png", gt_layer_feature_map, cmap='gray')
+                    print(f"{i} layer loss = ",layer_loss )
+                    all_loss = all_loss + layer_loss
+                print("final loss = ", all_loss/128)
+
+            #//////////////////////////////////////
 
             # save feature map
             feature_map = feature_map.cpu().numpy().astype(np.float16)
             torch.save(torch.tensor(feature_map).half(), os.path.join(saved_feature_path, '{0:05d}'.format(idx) + "_fmap_CxHxW.pt"))
+    
+    mean_loss = mean_loss/100
+    print("meanloss = ", mean_loss)
 
 
 def render_video(model_path, iteration, views, gaussians, pipeline, background, edit_config): ###
@@ -385,8 +393,8 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         #bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
         dim = scene.getTrainCameras()[0].semantic_feature.shape[0]
-        print("dim = ", dim)
-        bg_color = [1]*128 if dataset.white_background else [0]*128
+        bg_color = [1]*dim if dataset.white_background else [0]*dim
+        
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         print("background = ", background.cpu())

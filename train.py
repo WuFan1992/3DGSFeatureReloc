@@ -33,6 +33,14 @@ from models.networks import CNN_decoder
 from models.semantic_dataloader import VariableSizeDataset
 from torch.utils.data import DataLoader
 
+from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
+
+#////////////////////////////
+from submodules.disk.disk import DISK
+import torchvision
+#///////////////////////////
+
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -69,6 +77,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
 
+    writer = SummaryWriter('./logs')
 
     for iteration in range(first_iter, opt.iterations + 1):
         
@@ -84,6 +93,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        #viewpoint_cam = viewpoint_stack[0]
 
         # Render
         if (iteration - 1) == debug_from:
@@ -91,27 +101,68 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         print("iteration = ", iteration)
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
-        print("finish render ", iteration)
 
         feature_map, image, viewspace_point_tensor, visibility_filter, radii = render_pkg["feature_map"], render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-
+ 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         gt_feature_map = viewpoint_cam.semantic_feature.cuda()
         feature_map = F.interpolate(feature_map.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) 
-        print("feature map size = ", feature_map.shape)
-        print("gt feaature map size = ", gt_feature_map.shape)
         if dataset.speedup:
             feature_map = cnn_decoder(feature_map)
-         
+        
+        #//////////////////////////////////////////////////
+        #bitmap              = image.unsqueeze(0)/ 255.
+        #fdense_extract = model.descriptor
+        #dense_feature = fdense_extract(bitmap).squeeze(dim=0)
+        #feature_map = torch.nn.functional.normalize(dense_feature, dim=1)
+
+        #////////////////////////////////////////////////
         Ll1_feature = l1_loss(feature_map, gt_feature_map) 
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + 1.0 * Ll1_feature 
+        writer.add_scalar("loss",loss,iteration)
+        writer.add_scalar("image loss", Ll1, iteration)
         print("loss = ", loss)
         loss.backward()
-        print("before record ")
+
         iter_end.record()
 
+         #////////////////////////////////////// Use the image index = 0 to verifiy the loss 
+        #image = image.permute(1,2,0).to("cpu").detach().numpy()
+        #torchvision.utils.save_image(image, f"./output/each_channel_feature_map/residual/{iteration}_{loss}.png") 
+        #plt.imsave(f"./output/each_channel_feature_map/residual/{iteration}_{loss}.png", image, cmap='gray')
+        #if iteration % 50:
+        
+        if not iteration % 10:
+            viewpoint_stack_0 = scene.getTrainCameras().copy()
+            viewpoint_cam_0 = viewpoint_stack_0[0]
+            render_pkg_0 = render(viewpoint_cam_0, gaussians, pipe, background)
+
+            Ll1 = l1_loss(render_pkg_0["render"], viewpoint_cam_0.original_image.cuda())
+            #torchvision.utils.save_image(render_pkg_0["render"], f"./output/each_channel_feature_map/residual/{iteration}_{loss}.png") 
+            #torchvision.utils.save_image(viewpoint_cam_0.original_image.cuda(), f"./output/each_channel_feature_map/residual/{iteration}.png") 
+            diff_img = torch.abs(render_pkg_0["render"]-viewpoint_cam_0.original_image.cuda()).to("cpu").mean(0).detach().numpy()
+            plt.imsave(f"./output/each_channel_feature_map/residual/{iteration}_{Ll1}.png",diff_img , cmap='gray')
+            #feature_map_0 = F.interpolate(feature_map_0.unsqueeze(0), size=(gt_feature_map.shape[1], gt_feature_map.shape[2]), mode='bilinear', align_corners=True).squeeze(0) 
+            #if dataset.speedup:
+            #    feature_map_0 = cnn_decoder(feature_map_0)
+            
+
+            #layer_feature_map = feature_map_0[50,:,:].to("cpu")
+            #gt_layer_feature_map = gt_feature_map_0[50,:,:].to("cpu")
+            #layer_loss = l1_loss(feature_map_0, gt_feature_map_0).to("cpu") 
+            #writer.add_scalar("layer 50  loss", layer_loss, iteration)
+            #residual_feature = torch.abs(gt_feature_map_0 - feature_map_0).to("cpu").mean(0).detach().numpy()
+            #save_feature = feature_map_0.to("cpu").mean(0).detach().numpy()
+            #print("residual feature map size = ", residual_feature.shape)
+            #plt.imsave(f"./output/each_channel_feature_map/residual/{iteration}_{layer_loss}.png",save_feature , cmap='gray')
+            #save_gt_feature = gt_feature_map_0.to("cpu").mean(0).detach().numpy()
+            #plt.imsave(f"./output/each_channel_feature_map/residual/{iteration}.png", save_gt_feature , cmap='gray')
+
+            #//////////////////////////////////////
+        
+        
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
@@ -180,7 +231,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 except Exception as e:
                     # raise e
                     network_gui.conn = None
-            
+    writer.close()       
 
 
 def prepare_output_and_logger(args):    
@@ -270,6 +321,25 @@ if __name__ == "__main__":
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     print ("source path = ", lp._source_path )
+
+    #//////////////////////////////////
+    """
+    state_dict = torch.load("C:/Users/fwu/Documents/PhD_FanWU/MyCode/3DGS-bcom-Reloc/submodules/disk/depth-save.pth", map_location='cpu')
+    
+    if 'extractor' in state_dict:
+        weights = state_dict['extractor']
+    elif 'disk' in state_dict:
+        weights = state_dict['disk']
+    else:
+        raise KeyError('Incompatible weight file!')
+    DEV   = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = DISK(window=8, desc_dim=128)
+    model.load_state_dict(weights)
+    model = model.to(DEV)
+    """
+    #/////////////////////////////////
+
+
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
     # All done

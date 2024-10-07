@@ -180,7 +180,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	uint32_t* tiles_touched,
 	bool prefiltered)
 {
-	auto idx = cg::this_grid().thread_rank();
+	auto idx = cg::this_grid().thread_rank(); // thread index in grid (each grid have several block,and each block have several thread so here is the index of the thread in the whole grid)
 	if (idx >= P)
 		return;
 
@@ -392,7 +392,11 @@ renderCUDA(
 		// feature
 		for (int ch = 0; ch < NUM_SEMANTIC_CHANNELS; ch++)                 
 			out_feature_map[ch * H * W + pix_id] = SF[ch] + T * bg_color[ch];
+		
+		
 	}
+
+	
 }
 
 void FORWARD::render(
