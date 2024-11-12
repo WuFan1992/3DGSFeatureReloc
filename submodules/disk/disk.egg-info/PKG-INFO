@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: disk
+Version: 0.0.1
+Summary: Project DISK with adaptation for 3DGS in PyTorch code
+Author: Fan WU
+Author-email: fanwuchine@gmail.com
+License-File: LICENSE.txt

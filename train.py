@@ -120,7 +120,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         #////////////////////////////////////////////////
         Ll1_feature = l1_loss(feature_map, gt_feature_map) 
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) + 1.0 * Ll1_feature 
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image)) # + 1.0 * Ll1_feature 
         writer.add_scalar("loss",loss,iteration)
         writer.add_scalar("image loss", Ll1, iteration)
         print("loss = ", loss)
@@ -134,7 +134,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         #plt.imsave(f"./output/each_channel_feature_map/residual/{iteration}_{loss}.png", image, cmap='gray')
         #if iteration % 50:
         
-        if not iteration % 10:
+        if not iteration % 50:
             viewpoint_stack_0 = scene.getTrainCameras().copy()
             viewpoint_cam_0 = viewpoint_stack_0[0]
             render_pkg_0 = render(viewpoint_cam_0, gaussians, pipe, background)

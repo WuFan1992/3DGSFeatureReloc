@@ -56,6 +56,7 @@ class DISK(torch.nn.Module):
         B = images.shape[0]
         try:
             descriptors, heatmaps = self._split(self.unet(images))
+            print("descriptor size = ", descriptors.shape)
         except RuntimeError as e:
             if 'Trying to downsample' in str(e):
                 msg = ('U-Net failed because the input is of wrong shape. With '
@@ -76,3 +77,28 @@ class DISK(torch.nn.Module):
             features.append(keypoints[i].merge_with_descriptors(descriptors[i]))
 
         return np.array(features, dtype=object)
+    
+
+    @dimchecked
+    def descriptor(
+        self,
+        images: ['B', 'C', 'H', 'W'],
+        **kwargs
+    ) -> (['B', 128, 'H', 'W']):
+        
+        #Only Use to get the descriptor without the sampling and nms process
+         
+        try:
+            descriptors, _  = self._split(self.unet(images))
+        except RuntimeError as e:
+            if 'Trying to downsample' in str(e):
+                msg = ('U-Net failed because the input is of wrong shape. With '
+                       'a n-step U-Net (n == 4 by default), input images have '
+                       'to have height and width as multiples of 2^n (16 by '
+                       'default).')
+                raise RuntimeError(msg) from e
+            else:
+                raise
+            
+        return descriptors
+

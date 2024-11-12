@@ -103,14 +103,20 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder, semantic_fe
 
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
+        #//////////////////////
         image_name = os.path.basename(image_path).split(".")[0]
-        image = Image.open(image_path) 
+        #image = Image.open(image_path) 
+
+        image_path = os.path.join(images_folder, image_name+".color.pt")
+        image = torch.load(image_path)
+
+        #/////////////////
 
         
         semantic_feature_path = os.path.join(semantic_feature_folder, image_name) + '_fmap_CxHxW.pt' 
         semantic_feature_name = os.path.basename(semantic_feature_path).split(".")[0]
         semantic_feature = torch.load(semantic_feature_path) 
-
+        
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height,
                               semantic_feature=semantic_feature,
@@ -157,7 +163,11 @@ def readColmapSceneInfo(path, foundation_model, images, eval, llffhold=8):
         cam_extrinsics = read_extrinsics_text(cameras_extrinsic_file)
         cam_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
     
-    reading_dir = "images" if images == None else images
+    #//////////////////
+    #reading_dir = "images" if images == None else images
+    reading_dir = "false_images"
+    #///////////////////////////
+
 
     if foundation_model =='sam':
         semantic_feature_dir = "sam_embeddings" 
